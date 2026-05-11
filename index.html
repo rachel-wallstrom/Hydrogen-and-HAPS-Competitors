@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hydrogen & HAPS Competitor Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent-h2: #00d4ff;
+    --accent-haps: #ff6b35;
+    --accent-h2-dim: rgba(0,212,255,0.15);
+    --accent-haps-dim: rgba(255,107,53,0.15);
+    --text: #e8edf5;
+    --text-dim: #7a8ba3;
+    --text-muted: #3d5068;
+    --green: #00e676;
+    --red: #ff4444;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* GRID BACKGROUND */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { position: relative; z-index: 1; max-width: 1600px; margin: 0 auto; padding: 0 24px; }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+    background: rgba(10,14,23,0.9);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-inner {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent-h2), var(--accent-haps));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: #000;
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .header-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-num.h2 { color: var(--accent-h2); }
+  .stat-num.haps { color: var(--accent-haps); }
+  .stat-num.total { color: var(--text); }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 3px;
+    font-family: var(--mono);
+  }
+
+  /* FILTERS */
+  .filters {
+    padding: 16px 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .filter-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-family: var(--mono);
+    margin-right: 4px;
+  }
+
+  .pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 12px;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .pill:hover { border-color: var(--text-dim); color: var(--text); }
+  .pill.active-all { border-color: var(--text); background: rgba(232,237,245,0.1); color: var(--text); }
+  .pill.active-h2 { border-color: var(--accent-h2); background: var(--accent-h2-dim); color: var(--accent-h2); }
+  .pill.active-haps { border-color: var(--accent-haps); background: var(--accent-haps-dim); color: var(--accent-haps); }
+
+  .search-wrap {
+    margin-left: auto;
+    position: relative;
+  }
+
+  .search-wrap svg {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+  }
+
+  #search {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px 7px 32px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+    width: 220px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #search:focus { border-color: var(--accent-h2); }
+  #search::placeholder { color: var(--text-muted); }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding-bottom: 40px;
+  }
+
+  /* MAP */
+  .map-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+  }
+
+  .card-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  #map {
+    height: 480px;
+    width: 100%;
+  }
+
+  /* Leaflet dark theme overrides */
+  .leaflet-container { background: #0d1524 !important; }
+  .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.7) saturate(0.6); }
+
+  /* POPUP */
+  .leaflet-popup-content-wrapper {
+    background: var(--surface2) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
+    color: var(--text) !important;
+  }
+
+  .leaflet-popup-tip { background: var(--surface2) !important; }
+  .leaflet-popup-content { margin: 0 !important; }
+
+  .popup {
+    padding: 16px 18px;
+    min-width: 240px;
+    max-width: 300px;
+  }
+
+  .popup-cat {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .popup-cat .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .popup h3 {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .popup-loc {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    font-family: var(--mono);
+  }
+
+  .popup-blurb {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .popup-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .popup-status {
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+
+  .popup-status.active { background: rgba(0,230,118,0.15); color: var(--green); border: 1px solid rgba(0,230,118,0.3); }
+  .popup-status.inactive { background: rgba(255,68,68,0.15); color: var(--red); border: 1px solid rgba(255,68,68,0.3); }
+
+  .popup-link {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--accent-h2);
+    text-decoration: none;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .popup-link:hover { text-decoration: underline; }
+
+  /* TABLE */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead tr {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 12px 16px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  th:hover { color: var(--text); }
+
+  th .sort-icon { margin-left: 4px; opacity: 0.4; }
+  th.sorted .sort-icon { opacity: 1; color: var(--accent-h2); }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr.highlighted { background: rgba(0,212,255,0.06); }
+
+  td {
+    padding: 12px 16px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .td-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cat-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .cat-tag.h2 { background: var(--accent-h2-dim); color: var(--accent-h2); border: 1px solid rgba(0,212,255,0.2); }
+  .cat-tag.haps { background: var(--accent-haps-dim); color: var(--accent-haps); border: 1px solid rgba(255,107,53,0.2); }
+
+  .sub-tag {
+    font-size: 11px;
+    color: var(--text-dim);
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .location-cell {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .founded-cell {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+  }
+
+  .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.inactive { background: var(--red); }
+
+  .status-text {
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+
+  .no-results {
+    text-align: center;
+    padding: 48px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  /* LEGEND */
+  .legend {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-dim);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .legend-dot.h2 { background: var(--accent-h2); }
+  .legend-dot.haps { background: var(--accent-haps); }
+
+  /* DIVIDER */
+  .divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+  }
+
+  @media (max-width: 768px) {
+    h1 { font-size: 12px; }
+    .stats-bar { gap: 12px; }
+    .stat-num { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">H₂</div>
+      <div>
+        <h1>Hydrogen &amp; HAPS Competitor Intelligence</h1>
+        <div class="header-meta">Last updated May 2026 · rachel-wallstrom/Hydrogen-and-HAPS-Competitors</div>
+      </div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat">
+        <div class="stat-num total" id="total-count">24</div>
+        <div class="stat-label">Companies</div>
+      </div>
+      <div class="divider"></div>
+      <div class="stat">
+        <div class="stat-num h2" id="h2-count">13</div>
+        <div class="stat-label">H₂ Flight</div>
+      </div>
+      <div class="divider"></div>
+      <div class="stat">
+        <div class="stat-num haps" id="haps-count">11</div>
+        <div class="stat-label">HAPS</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="filters">
+    <span class="filter-label">Filter:</span>
+    <button class="pill active-all" data-filter="all">All</button>
+    <button class="pill" data-filter="Hydrogen Flight">⚡ Hydrogen Flight</button>
+    <button class="pill" data-filter="HAPS">🛰 HAPS</button>
+    <div class="divider"></div>
+    <button class="pill" data-filter="Active">● Active</button>
+    <button class="pill" data-filter="Inactive">○ Inactive</button>
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" id="search" placeholder="Search companies...">
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="map-card">
+      <div class="card-header">
+        <span class="card-title">Global Presence Map</span>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot h2"></div>Hydrogen Flight</div>
+          <div class="legend-item"><div class="legend-dot haps"></div>HAPS</div>
+          <div class="card-badge" id="visible-count">24 visible</div>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="table-card">
+      <div class="card-header">
+        <span class="card-title">Company Registry</span>
+        <span class="card-badge" id="table-count">24 companies</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-col="name">Company <span class="sort-icon">↕</span></th>
+              <th data-col="category">Category <span class="sort-icon">↕</span></th>
+              <th data-col="subcategory">Focus <span class="sort-icon">↕</span></th>
+              <th data-col="location">HQ <span class="sort-icon">↕</span></th>
+              <th data-col="founded">Founded <span class="sort-icon">↕</span></th>
+              <th data-col="status">Status <span class="sort-icon">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+        <div class="no-results" id="no-results" style="display:none">No companies match your filters.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const RAW = `name,category,subcategory,city,country,lat,lng,founded,status,blurb,website
+ZeroAvia,Hydrogen Flight,Fuel Cell Propulsion,Hollister,USA,36.8524,-121.4016,2017,Active,"Develops hydrogen-electric powertrains for commercial aviation. ZA600 system (660kW) targeting 2026 entry-into-service for 9-19 seat aircraft. Backed by Alaska Airlines, United Airlines, and IAG.",https://zeroavia.com
+Airbus ZEROe,Hydrogen Flight,Fuel Cell Propulsion,Toulouse,France,43.6047,1.4442,2020,Active,"Airbus program developing a hydrogen fuel cell-powered commercial aircraft targeting mid-2030s entry into service. Selected fuel cells over combustion in 2025 after extensive testing of both technologies.",https://airbus.com/zeroe
+H2FLY,Hydrogen Flight,Fuel Cell Propulsion,Stuttgart,Germany,48.7758,9.1829,2015,Active,"Subsidiary of Joby Aviation. Achieved world's first piloted liquid hydrogen-powered electric aircraft flight in 2023. Developing modular fuel cell systems from 30kW to 2MW for regional aircraft.",https://h2fly.de
+Cranfield Aerospace Solutions,Hydrogen Flight,Fuel Cell Propulsion,Bedford,UK,52.0735,-0.6167,1989,Active,"UK-based developer of hydrogen-electric conversion kits for small regional aircraft. Working with Air New Zealand, EVIA AERO, and MONTE Aircraft Leasing. Collaborating with Safran on 50-PAX regional aircraft.",https://cranfieldaerospace.com
+Beyond Aero,Hydrogen Flight,Fuel Cell Propulsion,Paris,France,48.8566,2.3522,2020,Active,"Developing hydrogen-powered business jets for private and corporate aviation. Focused on light jets using hydrogen propulsion technology for zero-emission private travel.",https://beyondaero.com
+Stralis Aircraft,Hydrogen Flight,Fuel Cell Propulsion,Brisbane,Australia,-27.4698,153.0251,2021,Active,"Australian company developing hydrogen-electric propulsion systems for commercial aircraft, drones, and vehicles. Targeting regional aviation markets across Asia-Pacific.",https://stralisaircraft.com
+Universal Hydrogen,Hydrogen Flight,Fuel Cell Propulsion,Los Angeles,USA,34.0522,-118.2437,2020,Inactive,"Pioneer in hydrogen logistics and aircraft conversion kits for regional turboprops. Raised $82.5M from GE Aviation, American Airlines, Airbus, JetBlue, and Toyota. Operations wound down in 2023.",https://universal-hydrogen.com
+GKN Aerospace (H2 GEAR),Hydrogen Flight,Fuel Cell Propulsion,Redditch,UK,52.3059,-1.9445,2020,Active,"H2 GEAR project has successfully ground-tested a cryogenic fuel cell powertrain demonstrating megawatt-scale hydrogen propulsion for regional aircraft.",https://gknaerospace.com
+Rolls-Royce,Hydrogen Flight,Hydrogen Combustion,Derby,UK,52.9225,-1.4746,1906,Active,"Running hydrogen ground tests on gas turbines for sustainable aviation. Partnered with EasyJet to accelerate hydrogen-powered engine development.",https://rolls-royce.com
+CFM International,Hydrogen Flight,Hydrogen Combustion,Cincinnati,USA,39.1031,-84.5120,1974,Active,"Joint venture between GE Aerospace and Safran. Modifying GE Passport turbofan for hydrogen combustion testing. Working with Airbus on A380 demonstrator flight program.",https://cfmaeroengines.com
+Destinus,Hydrogen Flight,Hydrogen Combustion,Munich,Germany,48.1351,11.5820,2021,Active,"Developing hypersonic hydrogen-powered aircraft for long-distance cargo and passenger transport. Targeting speeds of Mach 5+ with liquid hydrogen combustion propulsion.",https://destinus.ch
+Joby Aviation,Hydrogen Flight,Fuel Cell Propulsion,Santa Cruz,USA,36.9741,-122.0308,2009,Active,"eVTOL leader and parent of H2FLY. Successfully flew a hydrogen-powered VTOL aircraft 523 miles — believed to be the first forward flight of a VTOL powered by liquid hydrogen.",https://jobyaviation.com
+United Therapeutics,Hydrogen Flight,Fuel Cell Propulsion,Silver Spring,USA,38.9907,-77.0261,1996,Active,"Made the first piloted hydrogen fuel cell-powered eVTOL flight in March 2025 using a modified Robinson R44 helicopter in Québec. Targeting 200nm range with 500lb payload.",https://unither.com
+Aalto HAPS,HAPS,Solar-Electric Fixed Wing,Farnborough,UK,51.2798,-0.7762,2019,Active,"Airbus-backed spin-off operating the Zephyr solar-powered fixed-wing HAPS. Set a 67-day endurance record in 2025. One of only two companies to have flown HAPS through day and night.",https://aaltohaps.com
+SoftBank HAPSMobile,HAPS,Solar-Electric Fixed Wing,Tokyo,Japan,35.6762,139.6503,2017,Active,"Developed the 78-meter wingspan Sunglider solar-electric HAPS. Planning commercial stratospheric service launch in Japan by late 2026 for rural broadband and 5G connectivity.",https://hapsmobile.com
+Skydweller Aero,HAPS,Solar-Electric Fixed Wing,Oklahoma City,USA,35.4676,-97.5164,2019,Active,"US-Spanish aerospace company developing solar-powered aircraft for perpetual flight. HQ in Oklahoma City with R&D in Spain and Mississippi. Partnered with Thales in 2025 for long-endurance surveillance.",https://skydweller.aero
+BAE Systems PHASA-35,HAPS,Solar-Electric Fixed Wing,London,UK,51.5074,-0.1278,2018,Active,"PHASA-35 completed successful stratospheric test flights in December 2024 reaching 66,000 feet. Targeting operational readiness by 2026 for defense and surveillance.",https://baesystems.com
+Sceye,HAPS,Stratospheric Airship,New York,USA,40.7128,-74.0060,2016,Active,"U.S.-based HAPS company flying stratospheric airship platforms. One of only two companies that has flown HAPS through both day and night. Active in disaster resilience and emergency communications.",https://sceye.com
+Thales Alenia Stratobus,HAPS,Stratospheric Airship,Cannes,France,43.5528,7.0174,2014,Active,"Developing Stratobus, a semi-rigid stratospheric airship for persistent surveillance, disaster monitoring, and sovereign communications for hybrid space-terrestrial-HAPS networks.",https://thalesaleniaspace.com
+Stratospheric Platforms,HAPS,Hydrogen-Powered Fixed Wing,Cambridge,UK,52.2053,0.1218,2012,Active,"Cambridge startup designing a 60-meter-wingspan HAPS platform powered by hydrogen fuel cells to avoid solar day-night cycle limitations. One of few HAPS developers pursuing hydrogen propulsion.",https://stratosphericplatforms.com
+AeroVironment,HAPS,Solar-Electric Fixed Wing,Arlington,USA,38.8799,-77.1068,1971,Active,"Defense-focused HAPS developer. Horus A certification demonstrates clear commercialization pathway. Long-standing partner with NASA and USGS for ISR missions.",https://avinc.com
+Aerostar,HAPS,Stratospheric Balloon,Sioux Falls,USA,43.5473,-96.7283,1956,Active,"Stratospheric balloon-based HAPS operator, spin-off from Raven Industries. Regularly flying HAPS test missions. Active in commercial and defense connectivity and surveillance.",https://aerostar.com
+Near Space Labs,HAPS,Stratospheric Balloon,New York,USA,40.7128,-74.0060,2017,Active,"Sells change detection imagery from stratospheric balloon platforms to insurance providers. Focused on commercial earth observation from near-space altitude.",https://nearspacelabs.com
+Prismatic PHASA,HAPS,Solar-Electric Fixed Wing,Hampshire,UK,51.0577,-1.3081,2013,Active,"PHASA heritage developer exploring advanced meteorology for HAPS tropospheric operations. Achieved stratospheric flight in 2023. Targeting PHASA operations from 2028.",https://prismatic.aero`;
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const values = [];
+    let cur = '', inQ = false;
+    for (let ch of line) {
+      if (ch === '"') inQ = !inQ;
+      else if (ch === ',' && !inQ) { values.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    values.push(cur.trim());
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = values[i] || '');
+    return obj;
+  });
+}
+
+const DATA = parseCSV(RAW);
+
+let activeFilter = 'all';
+let activeSearch = '';
+let sortCol = 'name';
+let sortAsc = true;
+let highlightedRow = null;
+
+// MAP SETUP
+const map = L.map('map', { zoomControl: true }).setView([30, 10], 2);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors',
+  maxZoom: 18
+}).addTo(map);
+
+function makeIcon(cat) {
+  const color = cat === 'Hydrogen Flight' ? '#00d4ff' : '#ff6b35';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    <circle cx="14" cy="14" r="12" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="2"/>
+    <circle cx="14" cy="14" r="5" fill="${color}"/>
+    <line x1="14" y1="26" x2="14" y2="34" stroke="${color}" stroke-width="2"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg, className: '', iconSize: [28, 36], iconAnchor: [14, 34], popupAnchor: [0, -36]
+  });
+}
+
+const markers = {};
+
+DATA.forEach((d, i) => {
+  const lat = parseFloat(d.lat), lng = parseFloat(d.lng);
+  if (isNaN(lat)) return;
+  const marker = L.marker([lat, lng], { icon: makeIcon(d.category) });
+  const catClass = d.category === 'Hydrogen Flight' ? 'h2' : 'haps';
+  const catColor = d.category === 'Hydrogen Flight' ? '#00d4ff' : '#ff6b35';
+  const statusClass = d.status === 'Active' ? 'active' : 'inactive';
+  marker.bindPopup(`
+    <div class="popup">
+      <div class="popup-cat" style="color:${catColor}">
+        <span class="dot" style="background:${catColor}"></span>
+        ${d.category} · ${d.subcategory}
+      </div>
+      <h3>${d.name}</h3>
+      <div class="popup-loc">📍 ${d.city}, ${d.country} · Est. ${d.founded}</div>
+      <div class="popup-blurb">${d.blurb}</div>
+      <div class="popup-footer">
+        <span class="popup-status ${statusClass}">● ${d.status}</span>
+        <a class="popup-link" href="https://${d.website.replace('https://','')}" target="_blank">Visit →</a>
+      </div>
+    </div>
+  `, { maxWidth: 320 });
+  marker.addTo(map);
+  markers[i] = marker;
+});
+
+function getFiltered() {
+  return DATA.filter((d, i) => {
+    if (activeFilter === 'Active' && d.status !== 'Active') return false;
+    if (activeFilter === 'Inactive' && d.status !== 'Inactive') return false;
+    if (activeFilter === 'Hydrogen Flight' && d.category !== 'Hydrogen Flight') return false;
+    if (activeFilter === 'HAPS' && d.category !== 'HAPS') return false;
+    if (activeSearch) {
+      const q = activeSearch.toLowerCase();
+      if (!d.name.toLowerCase().includes(q) &&
+          !d.country.toLowerCase().includes(q) &&
+          !d.city.toLowerCase().includes(q) &&
+          !d.subcategory.toLowerCase().includes(q) &&
+          !d.blurb.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function render() {
+  const filtered = getFiltered();
+  const sorted = [...filtered].sort((a, b) => {
+    let av = a[sortCol] || '', bv = b[sortCol] || '';
+    if (sortCol === 'founded') { av = parseInt(av); bv = parseInt(bv); }
+    if (av < bv) return sortAsc ? -1 : 1;
+    if (av > bv) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  // Update counters
+  const h2 = filtered.filter(d => d.category === 'Hydrogen Flight').length;
+  const haps = filtered.filter(d => d.category === 'HAPS').length;
+  document.getElementById('total-count').textContent = filtered.length;
+  document.getElementById('h2-count').textContent = h2;
+  document.getElementById('haps-count').textContent = haps;
+  document.getElementById('visible-count').textContent = `${filtered.length} visible`;
+  document.getElementById('table-count').textContent = `${filtered.length} companies`;
+
+  // Update markers
+  const filteredIndices = new Set(filtered.map((_, i) => DATA.indexOf(filtered[i])));
+  DATA.forEach((d, i) => {
+    if (markers[i]) {
+      if (filteredIndices.has(i)) markers[i].addTo(map);
+      else map.removeLayer(markers[i]);
+    }
+  });
+
+  // Render table
+  const tbody = document.getElementById('table-body');
+  const noResults = document.getElementById('no-results');
+  if (sorted.length === 0) {
+    tbody.innerHTML = '';
+    noResults.style.display = 'block';
+    return;
+  }
+  noResults.style.display = 'none';
+  const catClass = d => d.category === 'Hydrogen Flight' ? 'h2' : 'haps';
+  const catLabel = d => d.category === 'Hydrogen Flight' ? '⚡ H₂ Flight' : '🛰 HAPS';
+  tbody.innerHTML = sorted.map((d, i) => `
+    <tr data-idx="${DATA.indexOf(d)}">
+      <td><div class="td-name">${d.name}</div></td>
+      <td><span class="cat-tag ${catClass(d)}">${catLabel(d)}</span></td>
+      <td><span class="sub-tag">${d.subcategory}</span></td>
+      <td><span class="location-cell">${d.city}, ${d.country}</span></td>
+      <td><span class="founded-cell">${d.founded}</span></td>
+      <td>
+        <span class="status-dot ${d.status.toLowerCase()}"></span>
+        <span class="status-text" style="color:${d.status==='Active'?'var(--green)':'var(--red)'}">${d.status}</span>
+      </td>
+    </tr>
+  `).join('');
+
+  // Row click → fly to on map
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const idx = parseInt(tr.dataset.idx);
+      const d = DATA[idx];
+      const lat = parseFloat(d.lat), lng = parseFloat(d.lng);
+      if (!isNaN(lat) && markers[idx]) {
+        map.flyTo([lat, lng], 5, { duration: 1 });
+        setTimeout(() => markers[idx].openPopup(), 1000);
+        tbody.querySelectorAll('tr').forEach(r => r.classList.remove('highlighted'));
+        tr.classList.add('highlighted');
+      }
+    });
+  });
+}
+
+// FILTER PILLS
+document.querySelectorAll('.pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    activeFilter = pill.dataset.filter;
+    document.querySelectorAll('.pill').forEach(p => {
+      p.className = 'pill';
+    });
+    if (activeFilter === 'all') pill.classList.add('active-all');
+    else if (activeFilter === 'Hydrogen Flight') pill.classList.add('active-h2');
+    else if (activeFilter === 'HAPS') pill.classList.add('active-haps');
+    else pill.classList.add('active-all');
+    render();
+  });
+});
+
+// SEARCH
+document.getElementById('search').addEventListener('input', e => {
+  activeSearch = e.target.value;
+  render();
+});
+
+// SORT
+document.querySelectorAll('th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) sortAsc = !sortAsc;
+    else { sortCol = col; sortAsc = true; }
+    document.querySelectorAll('th').forEach(t => t.classList.remove('sorted'));
+    th.classList.add('sorted');
+    th.querySelector('.sort-icon').textContent = sortAsc ? '↑' : '↓';
+    render();
+  });
+});
+
+render();
+</script>
+</body>
+</html>
